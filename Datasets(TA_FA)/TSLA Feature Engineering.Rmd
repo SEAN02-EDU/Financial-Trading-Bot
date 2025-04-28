@@ -1,0 +1,123 @@
+---
+title: "Feature Selection TSLA"
+output: html_document
+date: "2025-04-10"
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+This file contains code blocks for feature engineering for TSLA only.
+
+Ensure that Extract_FA_TSLA.ipynb, Technical Analysis.ipynb (TSLA), and TSLA_twitter_sentiment.csv were executed/downloaded before proceeding here.  
+
+
+Install the following libraries:
+install.packages(c("car", "dplyr", "glmnet", "caret"))
+```{r Import librarires}
+
+library(car)
+library(dplyr)
+library(glmnet)
+library(caret)
+
+```
+
+
+
+Import datasets. Change file directory accordingly. Run the follow cell once.
+```{r Import datasets}
+
+merged_df_TSLA = read.csv("/Users/tanyikchen/Library/CloudStorage/OneDrive-UniversityofNottinghamMalaysia/y3/DIA/Datasets/TSLA_TA_FA.csv")
+
+TSLA_SA = read.csv('/Users/tanyikchen/Library/CloudStorage/OneDrive-UniversityofNottinghamMalaysia/y3/DIA/Datasets/TSLA_twitter_sentiment.csv')
+
+merged_df_TSLA = merged_df_TSLA[-c(1, 2), ]
+
+```
+
+
+
+Reformat data columns. Ensure every variable is in the correct format.
+```{r Change data format}
+
+merged_df_TSLA = merged_df_TSLA %>%
+  rename(Date = Price)
+
+merged_df_TSLA$Date = as.Date(merged_df_TSLA$Date, format="%Y-%m-%d")
+
+merged_df_TSLA$Close = as.numeric(merged_df_TSLA$Close)
+merged_df_TSLA$High = as.numeric(merged_df_TSLA$High)
+merged_df_TSLA$Low = as.numeric(merged_df_TSLA$Low)
+merged_df_TSLA$Open = as.numeric(merged_df_TSLA$Open)
+merged_df_TSLA$Volume = as.numeric(merged_df_TSLA$Volume)
+
+merged_df_TSLA$EPS = as.numeric(merged_df_TSLA$EPS)
+merged_df_TSLA$P.E = as.numeric(merged_df_TSLA$P.E)
+merged_df_TSLA$ROE = as.numeric(merged_df_TSLA$ROE)
+merged_df_TSLA$D.E = as.numeric(merged_df_TSLA$D.E)
+merged_df_TSLA$P.B = as.numeric(merged_df_TSLA$P.B)
+merged_df_TSLA$Revenue_Growth = as.numeric(merged_df_TSLA$Revenue_Growth)
+merged_df_TSLA$Gross_Margin = as.numeric(merged_df_TSLA$Gross_Margin)
+merged_df_TSLA$B.S = as.numeric(merged_df_TSLA$B.S)
+
+final_TSLA_df = merge(merged_df_TSLA, TSLA_SA, by = "Date", all.x = TRUE)
+
+rf_data = final_TSLA_df[, !(names(final_TSLA_df) %in% c("Date", "Open", "High", "Low", "Volume"))]
+rf_data = rf_data[-nrow(rf_data), ]
+
+```
+
+
+
+Feature selection using linear regression. Iteratively remove features with high VIF score. Stop removing features if the highest VIF score is less than 5.
+
+SA is included in the study to study model performance after adding SA.
+```{r Linear Regression feature selection}
+
+#full_model = lm(Close ~ Daily_ROI + OBV + ATR + MACD + ADX + EPS + Revenue_Growth + Gross_Margin + P.E + ROE + D.E + P.B + B.S + sentiment_score, data = merged_df_TSLA)
+
+model1TSLA = lm(formula = Close ~ Daily_ROI + OBV + ATR + MACD + ADX + EPS + Gross_Margin + sentiment_score, data = rf_data)
+
+predictor_vars = attr(terms(model1AMZN), "term.labels")
+
+summary(model1TSLA)
+vif_values = vif(model1TSLA)
+vif_values[order(vif_values, decreasing = TRUE)]
+
+```
+
+
+
+ANOVA test to check whether adding TA/FA/SA helps improve the model or not.
+```{r ANOVA}
+
+model_TSLA_TA = lm(Close ~ Daily_ROI + OBV + ATR + MACD + ADX, data = rf_data)
+model_TSLA_FA = lm(Close ~ EPS + Gross_Margin, data = rf_data)
+model_TSLA_TA_FA = lm(Close ~ Daily_ROI + OBV + ATR + MACD + ADX + EPS + Gross_Margin, data = rf_data)
+model_TSLA_TA_FA_SA = lm(Close ~ Daily_ROI + OBV + ATR + MACD + ADX + EPS + Gross_Margin + sentiment_score, data = rf_data)
+
+anova(model_TSLA_TA, model_TSLA_TA_FA)
+anova(model_TSLA_FA, model_TSLA_TA_FA)
+anova(model_TSLA_TA_FA, model_TSLA_TA_FA_SA)
+
+```
+
+
+
+Export data. Change output_path to desired file directory. This dataset will be input into the LSTM/PPO model.
+```{r export data}
+
+output_path = '/Users/tanyikchen/Library/CloudStorage/OneDrive-UniversityofNottinghamMalaysia/y3/DIA/Datasets/TSLA_Significant.csv'
+
+all_vars = c("Date", "Close", predictor_vars)
+
+merged_df_TSLA_new = final_TSLA_df[, names(final_TSLA_df) %in% all_vars]
+
+write.csv(merged_df_TSLA_new, output_path)
+
+```

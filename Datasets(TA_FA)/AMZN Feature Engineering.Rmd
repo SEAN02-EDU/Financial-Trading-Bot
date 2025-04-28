@@ -1,0 +1,123 @@
+---
+title: "Feature Selection AMZN"
+output: html_document
+date: "2025-04-10"
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+This file contains code blocks for feature engineering for AMZN only.
+
+Ensure that Extract_FA_AMZN.ipynb, Technical Analysis.ipynb (AMZN), and AMZN_twitter_sentiment.csv were executed/downloaded before proceeding here. 
+
+
+Install the following libraries:
+install.packages(c("car", "dplyr", "glmnet", "caret"))
+```{r Import librarires}
+
+library(car)
+library(dplyr)
+library(glmnet)
+library(caret)
+
+```
+
+
+
+Import datasets. Change file directory accordingly. Run the follow cell once.
+```{r Import dataset}
+
+merged_df_AMZN = read.csv("/Users/tanyikchen/Library/CloudStorage/OneDrive-UniversityofNottinghamMalaysia/y3/DIA/Datasets/AMZN_TA_FA.csv")
+
+AMZN_SA = read.csv('/Users/tanyikchen/Library/CloudStorage/OneDrive-UniversityofNottinghamMalaysia/y3/DIA/Datasets/AMZN_twitter_sentiment.csv')
+
+merged_df_AMZN = merged_df_AMZN[-c(1, 2), ]
+
+```
+
+
+
+Reformat data columns. Ensure every variable is in the correct format.
+```{r Change data format}
+
+merged_df_AMZN = merged_df_AMZN %>%
+  rename(Date = Price)
+
+merged_df_AMZN$Date = as.Date(merged_df_AMZN$Date, format="%Y-%m-%d")
+
+merged_df_AMZN$Close = as.numeric(merged_df_AMZN$Close)
+merged_df_AMZN$High = as.numeric(merged_df_AMZN$High)
+merged_df_AMZN$Low = as.numeric(merged_df_AMZN$Low)
+merged_df_AMZN$Open = as.numeric(merged_df_AMZN$Open)
+merged_df_AMZN$Volume = as.numeric(merged_df_AMZN$Volume)
+
+merged_df_AMZN$EPS = as.numeric(merged_df_AMZN$EPS)
+merged_df_AMZN$P.E = as.numeric(merged_df_AMZN$P.E)
+merged_df_AMZN$ROE = as.numeric(merged_df_AMZN$ROE)
+merged_df_AMZN$D.E = as.numeric(merged_df_AMZN$D.E)
+merged_df_AMZN$P.B = as.numeric(merged_df_AMZN$P.B)
+merged_df_AMZN$Revenue_Growth = as.numeric(merged_df_AMZN$Revenue_Growth)
+merged_df_AMZN$Gross_Margin = as.numeric(merged_df_AMZN$Gross_Margin)
+merged_df_AMZN$B.S = as.numeric(merged_df_AMZN$B.S)
+
+final_AMZN_df = merge(merged_df_AMZN, AMZN_SA, by = "Date", all.x = TRUE)
+
+rf_data = final_AMZN_df[, !(names(final_AMZN_df) %in% c("Date", "Open", "High", "Low", "Volume"))]
+rf_data = rf_data[-nrow(rf_data), ]
+
+```
+
+
+
+Feature selection using linear regression. Iteratively remove features with high VIF score. Stop removing features if the highest VIF score is less than 5.
+
+SA is included in the study to study model performance after adding SA.
+```{r Linear Regression feature selection}
+
+#full_model = lm(Close ~ Daily_ROI + OBV + ATR + MACD + ADX + EPS + Revenue_Growth + Gross_Margin + P.E + ROE + D.E + P.B + B.S + sentiment_score, data = rf_data)
+
+model1AMZN = lm(formula = Close ~ Daily_ROI + ATR + MACD + ADX + Revenue_Growth + Gross_Margin + sentiment_score, data = rf_data)
+
+predictor_vars = attr(terms(model1AMZN), "term.labels")
+
+summary(model1AMZN)
+vif_values = vif(model1AMZN)
+vif_values[order(vif_values, decreasing = TRUE)]
+
+```
+
+
+
+ANOVA test to check whether adding TA/FA/SA helps improve the model or not.
+```{r ANOVA}
+
+model_AMZN_TA = lm(Close ~ Daily_ROI + ATR + MACD + ADX, data = rf_data)
+model_AMZN_FA = lm(Close ~ Revenue_Growth + Gross_Margin + sentiment_score, data = rf_data)
+model_AMZN_TA_FA = lm(Close ~ MACD + ADX + BB_upper + STOCH_K + EPS + Revenue.Growth, data = rf_data)
+model_AMZN_TA_FA_SA = lm(Close ~ MACD + ADX + BB_upper + STOCH_K + EPS + Revenue.Growth + sentiment_score, data = rf_data)
+
+anova(model_AMZN_TA, model_AMZN_TA_FA) 
+anova(model_AMZN_FA, model_AMZN_TA_FA)
+anova(model_AMZN_TA_FA, model_AMZN_TA_FA_SA)
+
+```
+
+
+
+Export data. Change output_path to desired file directory. This dataset will be input into the LSTM/PPO model.
+```{r Export data}
+
+output_path = '/Users/tanyikchen/Library/CloudStorage/OneDrive-UniversityofNottinghamMalaysia/y3/DIA/Datasets/AMZN_Significant.csv'
+
+all_vars = c("Date", "Close", predictor_vars)
+
+merged_df_AMZN_new = final_AMZN_df[, names(final_AMZN_df) %in% all_vars]
+
+write.csv(merged_df_AMZN_new, output_path)
+
+```
