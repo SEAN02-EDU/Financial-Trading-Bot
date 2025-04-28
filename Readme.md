@@ -35,7 +35,7 @@ It guides you through four stages:
 ## Requirements
 
 - **Python** 3.7 or higher (3.11 recommended)  
-- **Key libraries** (listed in `requirements.txt`):  
+- **Key libraries**:  
   `pandas`, `nltk`, `numpy`, `yfinance`, `talib`, `pdfplumber`,  
   `matplotlib`, `tensorflow`, `stable_baselines3`,  
   `prettytable`, `tabulate`  
